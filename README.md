@@ -1,11 +1,13 @@
-# LPS-Data-Warehouse-
+# LPS-Data-Warehouse
 
 
-# LPS Data Warehouse
+
 
 ## Overview
 
 This project centralizes key Lawrence Public Schools (LPS) data from multiple sources into a single, in-house Microsoft SQL Server Express database. The warehouse enables unified reporting and analytics, primarily through Power BI Desktop, while keeping all data on LPS-owned hardware (no cloud).
+
+![image](https://github.com/user-attachments/assets/391c8d1c-ae3a-4b4b-af92-e7f1b9c95840)
 
 ---
 
