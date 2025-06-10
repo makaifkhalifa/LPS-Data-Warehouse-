@@ -1,91 +1,108 @@
-# LPS-Data-Warehouse
+Lawrence Public Schools Data Pipeline: Automated Data Refresh for Power BI
+Overview
+This documentation explains the end-to-end data pipeline for Lawrence Public Schools’ analytics and dashboarding environment. The goal is to automate the refresh of critical device and inventory data from source systems all the way into live Power BI dashboards, with no manual intervention required.
 
+Current Data Flow
+Step-by-Step Process
+Data Exported from Source Systems
 
+Device and inventory data is exported daily as CSV or Excel files from systems such as:
 
+SCCM (Windows management)
 
-## Overview
+Jamf (Apple device management)
 
-This project centralizes key Lawrence Public Schools (LPS) data from multiple sources into a single, in-house Microsoft SQL Server Express database. The warehouse enables unified reporting and analytics, primarily through Power BI Desktop, while keeping all data on LPS-owned hardware (no cloud).
+ChromeOS (Chromebooks)
 
-![image](https://github.com/user-attachments/assets/391c8d1c-ae3a-4b4b-af92-e7f1b9c95840)
+Others as needed
 
----
+Files Copied to Central Shared Folder
 
-## Project Context
+Scripts automatically copy the exported files from their original locations (e.g., G:\Shared drives\IT\Inv\Auto Exports) to a centralized folder on the main data warehouse server:
 
-- **Goal:** Build an in-house data warehouse for IT inventory, device, staff, and account data.
-- **Data Sources:** Various `.csv` and `.xlsx` exports from Google Drive shared folders (e.g., Meraki, SCCM, AD, Jamf, etc.).
-- **Tools Used:**  
-  - Microsoft SQL Server 2022 Express (on local server/desktop)  
-  - SQL Server Management Studio (SSMS)  
-  - Excel/Power Query for basic cleanup  
-  - Power BI Desktop for reporting  
-- **Constraints:**  
-  - Data must remain on LPS-owned hardware (no cloud, no Snowflake)  
-  - Free or existing tools only
+Copy
+\\lps-dw1.lawrence.k12.ma.us\Data\IT
+This ensures all updated files are available in one location for processing.
 
----
+Example: The nightly SCCM export lands as sccm.csv in this folder.
 
-## Table Import Process
+Import Jobs (SSIS Packages) Monitor Shared Folder
 
-1. **Convert all source files to `.csv` format if needed** (Excel files were saved as `.csv`).
-2. **Import each file into SQL Server Express using SSMS:**
-   - Right-click the database → Tasks → Import Flat File...
-   - Choose the file, review column names/types.
-   - For all text columns, set data type to `nvarchar(255)` or `nvarchar(max)` to prevent truncation.
-   - For columns like Serial Number or Email, ensure appropriate type and size.
-   - Set a Primary Key if the data is guaranteed unique (e.g., Serial Number).
-3. **Table Naming:**
-   - Tables are named to match source files, but will be standardized to use lowercase and underscores for consistency (e.g., `macbooks_inventory`).
+SQL Server Integration Services (SSIS) packages (called “Import jobs” or “ITImports”) are configured on the lps-dw1 server.
 
----
+Each package watches the d:\Data\IT folder for new data files (e.g., sccm.csv, jamf.csv, chromeos.csv).
 
-## Current Tables
+Data Loaded into SQL Server
 
-| Table Name                | Source File                            |
-|-------------------------- |----------------------------------------|
-| all_adaccounts            | All-ADaccounts.csv                     |
-| chromeosdevices_reports   | ChromeOSDevices_Reports.csv            |
-| intunedevices_reports     | InTuneDevices_Reports.csv              |
-| ipadgroups_reports        | IPadGroups_Reports.csv                 |
-| jamf_pro_computers_export | jamf PRO Computers Export.csv          |
-| jamfpro_reports           | JamFPro_Reports.csv                    |
-| meraki_export_macbooks    | 2023-06-02-Meraki-Export-Macbooks.csv  |
-| sccm_export_monitors      | 2023-06-05-SCCM-Export-Monitors.csv    |
-| sccm_export_pcs           | 2023-06-05-SCCM-Export-PCs.csv         |
-| sccm_report               | SCCM_Report.csv                        |
-| ...                       | ... (add new tables here)              |
+When a new file is detected (typically after 12:20 AM each day), the corresponding SSIS package imports the data into a SQL Server table.
 
----
+The SQL database now holds the latest data from all sources.
 
-## Data Refresh Process
+Power BI Dashboards Connect to SQL Tables/Views
 
-- **Tables do NOT update automatically if source files change.**
-- When source files are updated:
-  1. Re-import the file into the existing table (overwrite or refresh as needed).
-  2. Ensure data types/column sizes are still sufficient for new data.
+Power BI dashboards are set up to connect directly to these SQL Server tables or views.
 
----
+When users refresh a dashboard, it pulls the most current data available.
 
-## Next Steps
+Diagram Flowchart
+    A[Export CSV/XLSX from SCCM, Jamf, ChromeOS, etc.] --> B[Files copied to \\lps-dw1\Data\IT]
+    B --> C[SSIS/ITImports jobs monitor d:\Data\IT for new files]
+    C --> D[SSIS job loads data into SQL Server tables]
+    D --> E[Power BI dashboards connect to SQL tables/views]
 
-- Create SQL Views for analytics and reporting (e.g., device counts by type, staff lists, etc.)
-- Connect Power BI Desktop to this database for dashboards.
-- Document data dictionary and standardize table/column names.
+![image](https://github.com/user-attachments/assets/e043257a-bca9-4dcf-b1cc-fe2176cabb1d)
+    
+Key Components
+Component	Description
+Source Systems	SCCM, Jamf, ChromeOS, etc.
+Shared Folder	d:\Data\IT on lps-dw1.lawrence.k12.ma.us
+SSIS Packages	Automation jobs (e.g., SCCMImport.dtsx) for each data file
+SQL Server	Central database storing cleaned/updated data
+Power BI	Dashboards consuming SQL data for analysis/visualization
 
----
+Benefits of This Pipeline
+Fully Automated: No manual file uploads or imports required.
 
-## Troubleshooting
+Always Up-to-Date: Dashboards reflect the latest available data each day.
 
-- **String or binary data would be truncated:**  
-  Increase the column size in the import wizard.
-- **Wrong data type (e.g., varbinary for emails):**  
-  Set the correct type (e.g., `nvarchar(255)`).
-- **Primary Key errors:**  
-  Only set a primary key if the column is truly unique.
+Centralized Source of Truth: All critical data is in one secure location.
 
----
+Easily Scalable: Add new data sources by creating/importing new SSIS packages.
 
-## Contact
+Traceable and Documented: Each step can be tracked and monitored.
 
-For questions or updates, contact the LPS Data Engineer/Analyst Kaif or IT Department.
+FAQ & Notes
+What if I need to add a new data source?
+
+Request or build a new export script to drop the CSV/XLSX file into d:\Data\IT.
+
+Create an SSIS import package for that file and set it to run after the file lands.
+
+Connect your new SQL table/view to Power BI as needed.
+
+How do I know if the pipeline worked?
+
+Check the last-modified time on the file in d:\Data\IT.
+
+Check SQL Server table data after the SSIS package runs.
+
+Refresh your Power BI dashboard and confirm updated data.
+
+Who manages the scripts and jobs?
+
+File copy automation: Logan/IT
+
+SSIS package setup/maintenance: Data engineering/IT team
+
+Dashboard building: Data analytics/BI team
+
+Contact
+For support or to request new data integrations, contact:
+
+Tony Le — Director of IS&T: tony.le@lawrence.k12.ma.us
+
+Logan Arias — IT Automation: [Logan's Email]
+
+LPS Help Desk — help@lawrence.k12.ma.us
+
+This documentation is current as of June 2025. Please update if changes are made to the process, folder locations, or automation jobs.
