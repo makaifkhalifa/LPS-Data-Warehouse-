@@ -1,5 +1,6 @@
 Lawrence Public Schools Data Pipeline: Automated Data Refresh for Power BI
 Overview
+
 This documentation explains the end-to-end data pipeline for Lawrence Public Schools’ analytics and dashboarding environment. The goal is to automate the refresh of critical device and inventory data from source systems all the way into live Power BI dashboards, with no manual intervention required.
 
 Current Data Flow
@@ -101,7 +102,7 @@ For support or to request new data integrations, contact:
 
 Tony Le — Director of IS&T: tony.le@lawrence.k12.ma.us
 
-Logan Arias — IT Automation: [Logan's Email]
+Kaif Khalifa — Data Engineer: mahammed.khalifa@lawrence.k12.ma.us
 
 LPS Help Desk — help@lawrence.k12.ma.us
 
