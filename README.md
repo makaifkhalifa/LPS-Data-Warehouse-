@@ -1,109 +1,243 @@
-Lawrence Public Schools Data Pipeline: Automated Data Refresh for Power BI
+Lawrence Public Schools – Device Inventory ETL Process
+Table of Contents
 Overview
 
-This documentation explains the end-to-end data pipeline for Lawrence Public Schools’ analytics and dashboarding environment. The goal is to automate the refresh of critical device and inventory data from source systems all the way into live Power BI dashboards, with no manual intervention required.
+Process Diagram:
+![image](https://github.com/user-attachments/assets/a653b62b-94f7-4381-b7e7-e44ba3822a43)
 
-Current Data Flow
-Step-by-Step Process
-Data Exported from Source Systems
+![image](https://github.com/user-attachments/assets/4806bd0c-8703-4124-a801-59d2917e4017)
 
-Device and inventory data is exported daily as CSV or Excel files from systems such as:
+Step-by-Step Instructions
 
-SCCM (Windows management)
+A. CSV Preparation
 
-Jamf (Apple device management)
+B. Create SSIS Packages (Visual Studio)
 
-ChromeOS (Chromebooks)
+C. Deploy Packages to SQL Server (SSISDB)
 
-Others as needed
+D. Create and Schedule SQL Server Agent Jobs
 
-Files Copied to Central Shared Folder
+E. (Optional) Create Views for Clean Data
 
-Scripts automatically copy the exported files from their original locations (e.g., G:\Shared drives\IT\Inv\Auto Exports) to a centralized folder on the main data warehouse server:
+Troubleshooting & Gotchas
 
+Best Practices
+
+Appendix: SQL Snippets
+
+Overview
+This documentation explains the end-to-end process for automating device inventory data loading from CSV files to SQL Server for analytics, reporting, and Power BI dashboards.
+
+Source: CSV files routinely refreshed in a shared network folder (D:\Data\IT\).
+
+Goal: Keep SQL Server tables up to date, clean, and ready for BI/reporting tools.
+
+Tech Stack: SSIS (SQL Server Integration Services), SQL Server Agent, Power BI, T-SQL.
+
+Process Diagram
+pgsql
 Copy
-\\lps-dw1.lawrence.k12.ma.us\Data\IT
-This ensures all updated files are available in one location for processing.
+Edit
+CSV Files in IT Folder
+       ↓
+SSIS Package (Flat File Source → OLE DB Destination)
+       ↓
+SQL Server Table (Raw Data)
+       ↓
+(SQL View strips out quote characters, etc.)
+       ↓
+Power BI / Reporting uses the cleaned View
+       ↓
+Automated Nightly Refresh via SQL Server Agent Job
+Step-by-Step Instructions
+A. CSV Preparation
+Location:
+Ensure all source CSV files (e.g., SCCM_Report.csv, JamFPro_Reports.csv, ChromeOSDevices_Reports.csv) are being regularly updated to a shared folder (e.g., D:\Data\IT\).
 
-Example: The nightly SCCM export lands as sccm.csv in this folder.
+Format:
+CSVs should have headers in the first row.
+All fields should be delimited by commas (,).
+Quotation marks around values are OK (we’ll strip them later).
 
-Import Jobs (SSIS Packages) Monitor Shared Folder
+B. Create SSIS Packages (Visual Studio)
+1. New SSIS Project
+Open SQL Server Data Tools (Visual Studio).
 
-SQL Server Integration Services (SSIS) packages (called “Import jobs” or “ITImports”) are configured on the lps-dw1 server.
+Create a new Integration Services Project.
 
-Each package watches the d:\Data\IT folder for new data files (e.g., sccm.csv, jamf.csv, chromeos.csv).
+2. Add Data Flow Task
+Drag a Data Flow Task into the Control Flow.
 
-Data Loaded into SQL Server
+3. Configure Data Flow
+In Data Flow:
 
-When a new file is detected (typically after 12:20 AM each day), the corresponding SSIS package imports the data into a SQL Server table.
+Drag in a Flat File Source.
 
-The SQL database now holds the latest data from all sources.
+Create a Flat File Connection Manager:
 
-Power BI Dashboards Connect to SQL Tables/Views
+Point it to your CSV file (e.g., D:\Data\IT\SCCM_Report.csv).
 
-Power BI dashboards are set up to connect directly to these SQL Server tables or views.
+Set delimiter to comma, make sure to check/uncheck “Column Names in First Data Row” as needed.
 
-When users refresh a dashboard, it pulls the most current data available.
+Set column widths (can use Suggest Types or set all to DT_STR, 255 for ease).
 
-Diagram Flowchart
-    A[Export CSV/XLSX from SCCM, Jamf, ChromeOS, etc.] --> B[Files copied to \\lps-dw1\Data\IT]
-    B --> C[SSIS/ITImports jobs monitor d:\Data\IT for new files]
-    C --> D[SSIS job loads data into SQL Server tables]
-    D --> E[Power BI dashboards connect to SQL tables/views]
+Drag in an OLE DB Destination:
 
-![image](https://github.com/user-attachments/assets/e043257a-bca9-4dcf-b1cc-fe2176cabb1d)
-    
-Key Components
-Component	Description
-Source Systems	SCCM, Jamf, ChromeOS, etc.
-Shared Folder	d:\Data\IT on lps-dw1.lawrence.k12.ma.us
-SSIS Packages	Automation jobs (e.g., SCCMImport.dtsx) for each data file
-SQL Server	Central database storing cleaned/updated data
-Power BI	Dashboards consuming SQL data for analysis/visualization
+Connect to your SQL Server database.
 
-Benefits of This Pipeline
-Fully Automated: No manual file uploads or imports required.
+New table or use an existing table (name e.g., SCCM_InventoryFinal).
 
-Always Up-to-Date: Dashboards reflect the latest available data each day.
+Map columns between source and destination.
 
-Centralized Source of Truth: All critical data is in one secure location.
+4. Save and Test Locally
+Right-click the package (e.g., SCCM_Import.dtsx) and Execute.
 
-Easily Scalable: Add new data sources by creating/importing new SSIS packages.
+Debug any data truncation or conversion errors (increase column widths, ignore problematic columns, etc.).
 
-Traceable and Documented: Each step can be tracked and monitored.
+C. Deploy Packages to SQL Server (SSISDB)
+1. Build the Project
+Right-click the project and select Build.
 
-FAQ & Notes
-What if I need to add a new data source?
+This generates a .ispac file in your /bin/Development folder.
 
-Request or build a new export script to drop the CSV/XLSX file into d:\Data\IT.
+2. Deploy with Deployment Wizard
+Double-click the .ispac file or use the “Integration Services Deployment Wizard.”
 
-Create an SSIS import package for that file and set it to run after the file lands.
+Choose Project Deployment Model.
 
-Connect your new SQL table/view to Power BI as needed.
+Deploy to the correct server and SSISDB folder (IT/Projects/YourProjectName).
 
-How do I know if the pipeline worked?
+3. Verify Deployment
+Open SQL Server Management Studio (SSMS).
 
-Check the last-modified time on the file in d:\Data\IT.
+Under Integration Services Catalogs → SSISDB → IT → Projects, confirm your packages are present.
 
-Check SQL Server table data after the SSIS package runs.
+D. Create and Schedule SQL Server Agent Jobs
+1. Create a New Job
+In SSMS, go to SQL Server Agent → Jobs → New Job.
 
-Refresh your Power BI dashboard and confirm updated data.
+Give it a descriptive name (e.g., Nightly_Device_Inventory_Refresh).
 
-Who manages the scripts and jobs?
+2. Add Steps
+Step 1: Run the SSIS package
 
-File copy automation: Logan/IT
+Type: SQL Server Integration Services Package
 
-SSIS package setup/maintenance: Data engineering/IT team
+Package source: SSIS Catalog
 
-Dashboard building: Data analytics/BI team
+Select your deployed package.
 
-Contact
-For support or to request new data integrations, contact:
+Step 2 (Optional): Post-processing
 
-Tony Le — Director of IS&T: tony.le@lawrence.k12.ma.us
+Type: Transact-SQL
 
-Kaif Khalifa — Data Engineer: mahammed.khalifa@lawrence.k12.ma.us
+Script to strip quotes from columns (if not using views).
 
-LPS Help Desk — help@lawrence.k12.ma.us
+Repeat for other CSVs/packages if desired (can be separate jobs or all in one).
 
-This documentation is current as of June 2025. Please update if changes are made to the process, folder locations, or automation jobs.
+3. Schedule the Job
+Go to Schedules tab, add a new schedule (e.g., every night at midnight).
+
+4. Test & Monitor
+Right-click the job and select Start Job at Step…
+
+If it fails, review the Job History and All Executions in SSISDB for detailed errors.
+
+E. (Optional) Create Views for Clean Data
+Why Views?
+Views allow you to “clean” data at query time—no need to mess with ETL/SSIS packages.
+
+Use SQL to strip quotes and other formatting issues.
+
+How to Create a View
+sql
+Copy
+Edit
+CREATE VIEW dbo.SCCM_Inventory_Clean AS
+SELECT
+    REPLACE([MANUFACTURER], '"', '') AS [MANUFACTURER],
+    REPLACE([MODEL], '"', '') AS [MODEL],
+    REPLACE([OPERATING SYSTEM], '"', '') AS [OPERATING SYSTEM],
+    -- (repeat for all columns as needed)
+    [IPv4],
+    [IPv6],
+    ...
+FROM dbo.SCCM_InventoryFinal;
+Repeat for other tables: JamFPro_ReportsFinal, ChromeOSDevices_ReportsFinal, etc.
+
+How to Use in Power BI
+In Power BI, connect to the SQL View (e.g., dbo.SCCM_Inventory_Clean), not the raw table.
+
+All updates to the table are instantly reflected in the view.
+
+Troubleshooting & Gotchas
+Data Truncation in SSIS:
+
+Increase column width in Flat File Connection Manager.
+
+Quotes in Data:
+
+Best to ignore in SSIS and clean in SQL Views.
+
+VS_NEEDS_NEWMETADATA / Validation Errors:
+
+Re-map destination columns if the table structure changes.
+
+Job Fails with Table Not Found:
+
+Check destination table name in SSIS and in SQL Server. They must match.
+
+SSIS Package Not in SSISDB:
+
+Make sure you deploy your .ispac via the wizard.
+
+Best Practices
+Keep ETL Simple:
+
+Load raw data as-is. Clean later via SQL views.
+
+Use Views for Cleaning:
+
+Never overwrite raw data. Views are flexible, easy to modify, and safe.
+
+Automate with Jobs:
+
+Schedule jobs for after-hours or non-peak times.
+
+Test Everything End-to-End:
+
+Manually run jobs after changes. Check Power BI or analytics tools.
+
+Version Control:
+
+Keep your SSIS packages and SQL scripts in GitHub or another version control system.
+
+Appendix: SQL Snippets
+A. Remove Quotes from All Columns
+sql
+Copy
+Edit
+UPDATE dbo.SCCM_InventoryFinal
+SET
+    [MANUFACTURER] = REPLACE([MANUFACTURER], '"', ''),
+    [MODEL] = REPLACE([MODEL], '"', ''),
+    -- repeat for all columns
+    [IPv4] = REPLACE([IPv4], '"', ''),
+    [IPv6] = REPLACE([IPv6], '"', '')
+-- Add more columns as needed
+B. Example View for JamFPro
+sql
+Copy
+Edit
+CREATE VIEW dbo.JamFPro_Reports_Clean AS
+SELECT
+    REPLACE([serialNumber], '"', '') AS [serialNumber],
+    REPLACE([name], '"', '') AS [name],
+    ...
+FROM dbo.JamFPro_ReportsFinal
+Contact & Ownership
+Primary: Mahammed Khalifa
+
+For questions: mahammed.khalifa@lawrence.k12.ma.us
+
+Docs last updated: June 12, 2025
